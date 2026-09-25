@@ -11,11 +11,11 @@ pub const LCD_BACKLIGHT: usize = 0x6000d824;
 pub const LCD_WIDTH: usize = 138;
 pub const LCD_HEIGHT: usize = 110;
 
-pub struct FramebufferType(UnsafeCell<[u8; LCD_WIDTH * LCD_HEIGHT]>);
+pub struct FramebufferType(pub UnsafeCell<[u8; (LCD_WIDTH * LCD_HEIGHT) / 4]>); // 2 bits per pixel
 
 unsafe impl Sync for FramebufferType {}
 
-pub static FRAMEBUFFER: FramebufferType = FramebufferType(UnsafeCell::new([0; LCD_WIDTH * LCD_HEIGHT]));
+pub static FRAMEBUFFER: FramebufferType = FramebufferType(UnsafeCell::new([0; (LCD_WIDTH * LCD_HEIGHT) / 4]));
 
 const R_START_OSC: usize = 0x00;
 const R_DRV_OUTPUT_CONTROL: usize = 0x01;
@@ -57,7 +57,7 @@ fn lcd_prepare_cmd(cmd: usize) {
 }
 
 fn lcd_write_data(data: usize, width: usize) {
-    for i in 0..width/2 {
+    for i in 0..width {
         unsafe {
             let inputlo = (data as *mut u8).add(i*2).read_volatile();
             let inputhi = (data as *mut u8).add(i*2 +1).read_volatile();
@@ -93,7 +93,7 @@ pub fn lcd_init() {
             }
         }
     }
-    
+
     lcd_wait_write();
     unsafe {
         // specific to ipod mini 2g
@@ -105,6 +105,10 @@ pub fn lcd_init() {
     lcd_cmd_and_data(R_DISPLAY_CONTROL, 0x0019);
     lcd_set_contrast(DEFAULT_CONTRAST);
     lcd_cmd_and_data(R_ENTRY_MODE, 0x0000);
+    lcd_cmd_and_data(R_DRV_OUTPUT_CONTROL, 0x010d);
+    lcd_cmd_and_data(R_1ST_SCR_DRV_POS, 0x6d00);
+
+    lcd_invert(true);
 }
 
 pub fn lcd_invert(new_invert: bool) {
@@ -127,10 +131,15 @@ pub fn lcd_update_rect(fb: usize, mut x: usize, mut y: usize, mut width: usize, 
     let mut ymax = y + height.saturating_sub(1);
     ymax = ymax.min(LCD_HEIGHT - 1);
 
+    let xmax = (x + width - 1) >> 3;
+    x >>= 3;
+    width = xmax - x + 1;
+
     for y in y..=ymax {
         lcd_cmd_and_data(R_RAM_ADDR_SET, (y << 5) + 20 - x);
         lcd_prepare_cmd(R_RAM_DATA);
-        lcd_write_data(fb + (y * LCD_WIDTH) + x, width);
+        let addr = (y * LCD_WIDTH * 2 + x * 2) / 4;
+        lcd_write_data(fb + addr, width);
     }
 }
 
