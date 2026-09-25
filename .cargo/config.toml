@@ -1,0 +1,4 @@
+[target.armv4t-none-eabi]
+rustflags = [
+    "-C", "link-args=-nostdlib"
+]
