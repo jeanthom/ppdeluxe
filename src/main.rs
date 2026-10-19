@@ -128,6 +128,29 @@ fn cmd_write(width: Width, args: Args) -> Result<String, &'static str> {
     Ok(out)
 }
 
+fn cmd_call(args: Args) -> Result<String, &'static str> {
+    let addr = args.get(0).and_then(parse_hex).ok_or("bad or missing address")?;
+    if addr % 4 != 0 {
+        return Err("address isn't word aligned");
+    }
+    if args.get(5).is_some() {
+        return Err("at most 4 arguments");
+    }
+    let mut regs = [0u32; 4];
+    for (i, reg) in regs.iter_mut().enumerate() {
+        if let Some(s) = args.get(i + 1) {
+            *reg = parse_hex(s).ok_or("bad argument")?;
+        }
+    }
+
+    let f: extern "C" fn(u32, u32, u32, u32) -> u32 = unsafe { core::mem::transmute(addr as usize) };
+    let ret = f(regs[0], regs[1], regs[2], regs[3]);
+
+    let mut out = String::new();
+    let _ = write!(out, "r0 = {:08x}", ret);
+    Ok(out)
+}
+
 async fn shell() -> ! {
     let mut shell = Shell::new();
     shell.prompt("pp> ");
@@ -175,6 +198,14 @@ async fn shell() -> ! {
     shell.add_command("w32", "w32 <addr> <value>: write a word to addr (both hex)", |args, mut io| {
         Box::pin(async move {
             match cmd_write(Width::U32, args) {
+                Ok(out) => io.println(&out).await,
+                Err(e) => io.println(e).await,
+            }
+        })
+    });
+    shell.add_command("call", "call <addr> [r0..r3]: call ARM code at addr with up to 4 args", |args, mut io| {
+        Box::pin(async move {
+            match cmd_call(args) {
                 Ok(out) => io.println(&out).await,
                 Err(e) => io.println(e).await,
             }
