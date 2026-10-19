@@ -1,9 +1,3 @@
-// SER1 console on the dock connector. the 16550 itself is driven by the uart_16550 crate, this
-// file only does the PP5020-specific bring-up. the sequence comes from the iPod mini 1G
-// diagnostics image (internal ROM, loaded at 0x10000000, setup routine at 0x10007b4c), which
-// uses SER1 as its console; it's the same as rockbox serial_setup() apart from the port and the
-// pin routing. everything here is polled
-
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::ptr::NonNull;
@@ -13,6 +7,7 @@ use uart_16550::backend::MmioBackend;
 use uart_16550::spec::registers::FifoTriggerLevel;
 use uart_16550::{BaudRate, Config, InitError, Uart16550};
 
+use crate::board_id::Model;
 use crate::devcon;
 use crate::mmio;
 
@@ -30,6 +25,10 @@ const SER1_PIN_ROUTE: usize = 0x70000014;
 const SER1_PIN_ROUTE_MASK: u32 = 0xf00;
 const SER1_PIN_ROUTE_VAL: u32 = 0xa00;
 
+// iPod photo only: diag ROM clears some GPIO D enable bits before using SER1
+const GPIOD_ENABLE: usize = 0x6000d00c;
+const GPIOD_SER1_PINS: u32 = 0x06;
+
 // the UART is clocked at 24MHz and rockbox uses a divisor of 13 (24000000/13/16 = 115384 baud).
 // uart_16550 refuses divisors that aren't an exact integer, so pretend the clock is exactly
 // 16 * 13 * 115200 Hz: it then programs DLL=13, same as rockbox
@@ -42,18 +41,21 @@ unsafe impl Sync for ConsoleType {}
 pub static CONSOLE: ConsoleType = ConsoleType(UnsafeCell::new(None));
 
 // pin routing, clock enable and reset
-fn board_setup() {
+fn board_setup(model: Model) {
     unsafe {
         let route = mmio::read::<u32>(SER1_PIN_ROUTE) & !SER1_PIN_ROUTE_MASK;
         mmio::write::<u32>(SER1_PIN_ROUTE, route | SER1_PIN_ROUTE_VAL);
+        if model == Model::Photo {
+            mmio::clear_bits(GPIOD_ENABLE, GPIOD_SER1_PINS);
+        }
     }
     devcon::disable(devcon::DEV_SER0);
     devcon::enable(devcon::DEV_SER1);
     devcon::reset_pulse(devcon::DEV_SER1);
 }
 
-pub fn init() -> Result<(), InitError> {
-    board_setup();
+pub fn init(model: Model) -> Result<(), InitError> {
+    board_setup(model);
 
     let mut uart = unsafe {
         Uart16550::new_mmio(NonNull::new(SER1_BASE as *mut u8).unwrap(), SER1_STRIDE)

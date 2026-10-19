@@ -14,6 +14,7 @@ use embassy_shell::{Args, Shell};
 
 use crate::uart::AsyncConsole;
 
+pub mod board_id;
 pub mod devcon;
 pub mod heap;
 pub mod mmio;
@@ -187,7 +188,8 @@ async fn shell() -> ! {
 
 #[unsafe(no_mangle)]
 extern "C" fn _ipod_main() -> ! {
-    let uart_result = uart::init();
+    let model = board_id::model();
+    let uart_result = uart::init(model);
 
     println!();
     println!("ppdeluxe on PP5020, PROC_ID=0x{:02x}", unsafe { mmio::read::<u32>(mmio::PROC_ID) } & 0xff);

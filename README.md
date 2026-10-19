@@ -11,7 +11,7 @@ ppdeluxe is heavily based on [scythe](https://forge.voremicrocomputers.com/husky
 
 ## Quick start tutorial
 
-1. Install Rockbox on your iPod mini 1G
+1. Install Rockbox on your iPod
 2. Run `./build.sh` (requires Rust ARM toolchain + arm-none-eabi- toolchain)
 3. Copy `linux.bin` from root directory into iPod storage
 4. Reboot iPod (hold menu + center), once Apple logo shows up, hold play button until backlight is on
