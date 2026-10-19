@@ -2,7 +2,7 @@
 
 use crate::mmio;
 
-const HW_REVISION: usize = 0x20002084;
+const HW_REVISION: usize = 0x2084;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Model {
